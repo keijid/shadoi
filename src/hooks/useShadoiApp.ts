@@ -92,6 +92,7 @@ export function useShadoiApp(config: AppConfig) {
   const spRef = useRef<tts.SpeakHandle | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
+  const recAutoPlayRef = useRef(true);
   const chainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const screenRef = useRef<Screen>(state.screen);
   useEffect(() => {
@@ -165,6 +166,7 @@ export function useShadoiApp(config: AppConfig) {
         }
       }
       if (recRef.current) {
+        recAutoPlayRef.current = false;
         try {
           recRef.current.stop();
         } catch {
@@ -196,7 +198,8 @@ export function useShadoiApp(config: AppConfig) {
     return arr.find((t) => t.id === state.selTake) || arr[arr.length - 1] || null;
   }
 
-  function stopAll() {
+  /** Stop the reference readout and any queued chain step. Leaves recording alone. */
+  function stopSpeech() {
     if (spRef.current) {
       spRef.current.stop();
       spRef.current = null;
@@ -206,6 +209,11 @@ export function useShadoiApp(config: AppConfig) {
       clearTimeout(chainTimerRef.current);
       chainTimerRef.current = null;
     }
+    patch((s) => (s.speaking || s.line >= 0 ? { speaking: false, progress: 0, line: -1 } : {}));
+  }
+
+  /** Stop playback of a recorded take. */
+  function stopMine() {
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -214,18 +222,31 @@ export function useShadoiApp(config: AppConfig) {
       }
       audioRef.current = null;
     }
+    patch((s) => (s.playingMine ? { playingMine: false, playingId: null, progress: 0 } : {}));
+  }
+
+  /**
+   * Stop the in-flight recording; its onstop handler stores the take.
+   * `autoPlay` replays it straight away (what the stop button does) — off when
+   * we are only tearing down, so navigating away can't start audio.
+   */
+  function stopRecording(autoPlay: boolean) {
+    recAutoPlayRef.current = autoPlay;
     if (recRef.current) {
       try {
         recRef.current.stop();
       } catch {
         /* ignore */
       }
+    } else {
+      patch((s) => (s.recording ? { recording: false } : {}));
     }
-    patch((s) =>
-      s.speaking || s.playingMine || s.recording || s.line >= 0
-        ? { speaking: false, playingMine: false, recording: false, playingId: null, progress: 0, line: -1 }
-        : {},
-    );
+  }
+
+  function stopAll() {
+    stopSpeech();
+    stopMine();
+    stopRecording(false);
   }
 
   function speakScript(after?: () => void, rateOverride?: number) {
@@ -278,7 +299,10 @@ export function useShadoiApp(config: AppConfig) {
   }
 
   async function startRec() {
-    stopAll();
+    // Shadowing means speaking over the reference, so the readout runs
+    // alongside the recorder rather than being stopped by it.
+    stopSpeech();
+    stopMine();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
       const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
@@ -297,11 +321,15 @@ export function useShadoiApp(config: AppConfig) {
         takesRef.current[mid] = (takesRef.current[mid] || []).concat([take]);
         recRef.current = null;
         patch((s) => ({ recording: false, takeCount: s.takeCount + 1, selTake: take.id }));
-        playTake(take);
+        if (recAutoPlayRef.current) playTake(take);
       };
       recRef.current = rec;
+      recAutoPlayRef.current = true;
       rec.start();
       patch({ recording: true, err: '' });
+      // Without an English voice the take is still worth recording — just
+      // without a reference to shadow.
+      if (voiceRef.current) speakScript();
     } catch {
       patch({ err: 'マイクを使用できませんでした。ブラウザのマイク許可を確認してください。' });
     }
@@ -387,23 +415,19 @@ export function useShadoiApp(config: AppConfig) {
   // --- Practice: transport ---
   function playRef() {
     if (state.speaking) {
-      stopAll();
+      stopSpeech();
       return;
     }
-    stopAll();
+    stopSpeech();
+    stopMine();
     speakScript();
   }
   function toggleRec() {
     if (state.recording) {
-      if (recRef.current) {
-        try {
-          recRef.current.stop();
-        } catch {
-          /* ignore */
-        }
-      } else {
-        patch({ recording: false });
-      }
+      // The take is over: silence the reference so it can't bleed into the
+      // replay that follows.
+      stopSpeech();
+      stopRecording(true);
     } else {
       startRec();
     }
@@ -417,10 +441,12 @@ export function useShadoiApp(config: AppConfig) {
   function cycleSpeed() {
     const opts = SPEED_OPTIONS;
     const next = opts[(opts.indexOf(state.speed as (typeof opts)[number]) + 1) % opts.length];
-    const busy = state.speaking || state.playingMine;
+    const wasSpeaking = state.speaking;
     patch({ speed: next });
-    if (busy) {
-      stopAll();
+    // The readout can't change rate mid-utterance, so restart it at the new
+    // speed. A recording in progress keeps running.
+    if (wasSpeaking) {
+      stopSpeech();
       speakScript(undefined, next);
     }
   }

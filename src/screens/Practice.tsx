@@ -157,8 +157,20 @@ export function Practice({ app }: { app: ShadoiApp }) {
 
         <div style={{ marginTop: 22, display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: colors.textSub }}>
           <span style={{ height: 6, width: 6, borderRadius: '50%', background: state.recording ? colors.redRec : busy ? colors.accent : colors.chevron }} />
-          <span>{state.recording ? '録音中' : state.speaking ? '元音声を再生中' : state.playingMine ? '自分の録音を再生中' : '待機中'}</span>
-          <span style={{ marginLeft: 'auto' }}>{hasTake ? '交互に聞くと差が見つかる' : '元音声に声を重ねて録音'}</span>
+          <span>
+            {state.recording
+              ? state.speaking
+                ? '録音中 · 元音声を再生中'
+                : '録音中'
+              : state.speaking
+                ? '元音声を再生中'
+                : state.playingMine
+                  ? '自分の録音を再生中'
+                  : '待機中'}
+          </span>
+          <span style={{ marginLeft: 'auto' }}>
+            {state.recording ? 'イヤホン推奨 · 元音声に重ねて話す' : hasTake ? '交互に聞くと差が見つかる' : '録音を押すと元音声が流れます'}
+          </span>
         </div>
         <div style={{ marginTop: 8, height: 6, borderRadius: 999, background: colors.borderSofter, overflow: 'hidden' }}>
           <div
