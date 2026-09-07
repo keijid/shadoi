@@ -2,10 +2,11 @@ import type { ShadoiApp } from '../hooks/useShadoiApp';
 import { sentences } from '../lib/tts';
 import { fmtElapsed, fmtClock } from '../lib/format';
 import { colors, shadows } from '../lib/theme';
+import { SPEED_OPTIONS } from '../lib/config';
 
 export function Practice({ app }: { app: ShadoiApp }) {
   const { state, currentMaterial, voiceOptions, takes } = app;
-  const { toggleScript, toggleJa, setVoice, playRef, toggleRec, cycleSpeed, playTakeById, deleteTakeById, goResult } = app;
+  const { toggleScript, toggleJa, setVoice, playRef, toggleRec, setSpeed, playTakeById, deleteTakeById, goResult } = app;
 
   const hasTake = takes.length > 0;
   const busy = state.speaking || state.playingMine;
@@ -218,12 +219,32 @@ export function Practice({ app }: { app: ShadoiApp }) {
             </button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button
-              onClick={cycleSpeed}
-              style={{ background: colors.neutralBg, color: colors.textFaint4, border: 0, borderRadius: 11, padding: '0 14px', height: 40, fontSize: 13, fontWeight: 500 }}
-            >
-              速度 x{state.speed.toFixed(1)}
-            </button>
+            <div style={{ display: 'flex', gap: 2, padding: 3, background: colors.neutralBg, borderRadius: 999 }}>
+              {SPEED_OPTIONS.map((v) => {
+                const on = state.speed === v;
+                return (
+                  <button
+                    key={v}
+                    onClick={() => setSpeed(v)}
+                    aria-pressed={on}
+                    style={{
+                      background: on ? colors.card : 'transparent',
+                      color: on ? colors.text : colors.textFaint2,
+                      border: 0,
+                      borderRadius: 999,
+                      padding: '0 13px',
+                      height: 34,
+                      fontSize: 12.5,
+                      fontWeight: on ? 700 : 500,
+                      boxShadow: on ? '0 1px 2px rgba(20,24,31,.10)' : 'none',
+                      transition: 'background .15s, color .15s',
+                    }}
+                  >
+                    x{v.toFixed(1)}
+                  </button>
+                );
+              })}
+            </div>
             <button
               onClick={goResult}
               style={{ marginLeft: 'auto', background: 'transparent', color: colors.accentDark, border: 0, padding: '0 6px', height: 40, fontSize: 13, fontWeight: 700 }}

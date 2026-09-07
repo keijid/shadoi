@@ -3,7 +3,7 @@ import type { AppConfig, Draft, HistoryEntry, Level, LevelFilter, Material, Mate
 import { BUILTIN_MATERIALS, buildHistory, wordCount } from '../lib/materials';
 import * as tts from '../lib/tts';
 import { dayGap, dayKey, loadPersisted, savePersisted, shortLabel } from '../lib/storage';
-import { SPEED_OPTIONS, loopGapMs } from '../lib/config';
+import { loopGapMs } from '../lib/config';
 
 interface State {
   screen: Screen;
@@ -450,9 +450,9 @@ export function useShadoiApp(config: AppConfig) {
       startRec();
     }
   }
-  function cycleSpeed() {
-    const opts = SPEED_OPTIONS;
-    const next = opts[(opts.indexOf(state.speed as (typeof opts)[number]) + 1) % opts.length];
+  function setSpeed(next: number) {
+    // Re-tapping the current speed shouldn't interrupt a pass in progress.
+    if (next === state.speed) return;
     const wasSpeaking = state.speaking;
     const current = speakOptsRef.current;
     patch({ speed: next });
@@ -538,7 +538,7 @@ export function useShadoiApp(config: AppConfig) {
 
     playRef,
     toggleRec,
-    cycleSpeed,
+    setSpeed,
     playTakeById,
     deleteTakeById,
 
