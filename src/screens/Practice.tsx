@@ -160,16 +160,22 @@ export function Practice({ app }: { app: ShadoiApp }) {
           <span>
             {state.recording
               ? state.speaking
-                ? '録音中 · 元音声を再生中'
+                ? `録音中 · 元音声を${state.looping ? 'リピート' : '再生'}中`
                 : '録音中'
               : state.speaking
-                ? '元音声を再生中'
+                ? `元音声を${state.looping ? 'リピート' : '再生'}中`
                 : state.playingMine
                   ? '自分の録音を再生中'
                   : '待機中'}
           </span>
           <span style={{ marginLeft: 'auto' }}>
-            {state.recording ? 'イヤホン推奨 · 元音声に重ねて話す' : hasTake ? '交互に聞くと差が見つかる' : '録音を押すと元音声が流れます'}
+            {state.recording
+              ? 'イヤホン推奨 · 元音声に重ねて話す'
+              : state.speaking
+                ? 'もう一度押すと止まります'
+                : hasTake
+                  ? '交互に聞くと差が見つかる'
+                  : '元音声は止めるまで繰り返します'}
           </span>
         </div>
         <div style={{ marginTop: 8, height: 6, borderRadius: 999, background: colors.borderSofter, overflow: 'hidden' }}>

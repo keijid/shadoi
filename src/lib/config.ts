@@ -11,3 +11,9 @@ export const APP_CONFIG: AppConfig = {
 
 export const SPEED_OPTIONS = [0.6, 0.8, 1, 1.2] as const;
 export const CHAIN_GAP_MS = 340;
+
+/**
+ * Pause between repeats of the looping reference readout — long enough to
+ * hear the boundary and reset your breath, wider at slow speeds.
+ */
+export const loopGapMs = (rate: number) => (rate < 0.9 ? 1600 : 1200);

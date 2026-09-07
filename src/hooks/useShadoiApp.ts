@@ -3,7 +3,7 @@ import type { AppConfig, Draft, HistoryEntry, Level, LevelFilter, Material, Mate
 import { BUILTIN_MATERIALS, buildHistory, wordCount } from '../lib/materials';
 import * as tts from '../lib/tts';
 import { dayGap, dayKey, loadPersisted, savePersisted, shortLabel } from '../lib/storage';
-import { CHAIN_GAP_MS, SPEED_OPTIONS } from '../lib/config';
+import { CHAIN_GAP_MS, SPEED_OPTIONS, loopGapMs } from '../lib/config';
 
 interface State {
   screen: Screen;
@@ -15,6 +15,8 @@ interface State {
   showScript: boolean;
   showJa: boolean;
   speaking: boolean;
+  /** The readout is repeating until stopped (practice mode). */
+  looping: boolean;
   playingMine: boolean;
   recording: boolean;
   err: string;
@@ -30,6 +32,15 @@ interface State {
   streak: number;
   history: HistoryEntry[];
   draft: Draft;
+}
+
+interface SpeakOpts {
+  /** Chain a step once the readout finishes. Ignored when `loop` is set. */
+  after?: () => void;
+  /** Override the current speed (used when the rate changes mid-playback). */
+  rate?: number;
+  /** Repeat the script until stopped. */
+  loop?: boolean;
 }
 
 function emptyDraft(): Draft {
@@ -65,6 +76,7 @@ function buildInitialState(config: AppConfig): State {
     showScript: !config.hideScriptFirst,
     showJa: false,
     speaking: false,
+    looping: false,
     playingMine: false,
     recording: false,
     err: '',
@@ -94,6 +106,8 @@ export function useShadoiApp(config: AppConfig) {
   const recRef = useRef<MediaRecorder | null>(null);
   const recAutoPlayRef = useRef(true);
   const chainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speakOptsRef = useRef<SpeakOpts>({});
   const screenRef = useRef<Screen>(state.screen);
   useEffect(() => {
     screenRef.current = state.screen;
@@ -158,6 +172,7 @@ export function useShadoiApp(config: AppConfig) {
       if (spRef.current) spRef.current.stop();
       tts.cancel();
       if (chainTimerRef.current) clearTimeout(chainTimerRef.current);
+      if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
       if (audioRef.current) {
         try {
           audioRef.current.pause();
@@ -209,7 +224,12 @@ export function useShadoiApp(config: AppConfig) {
       clearTimeout(chainTimerRef.current);
       chainTimerRef.current = null;
     }
-    patch((s) => (s.speaking || s.line >= 0 ? { speaking: false, progress: 0, line: -1 } : {}));
+    // Cancels a repeat that is waiting out the gap between passes.
+    if (loopTimerRef.current) {
+      clearTimeout(loopTimerRef.current);
+      loopTimerRef.current = null;
+    }
+    patch((s) => (s.speaking || s.line >= 0 ? { speaking: false, looping: false, progress: 0, line: -1 } : {}));
   }
 
   /** Stop playback of a recorded take. */
@@ -249,28 +269,49 @@ export function useShadoiApp(config: AppConfig) {
     stopRecording(false);
   }
 
-  function speakScript(after?: () => void, rateOverride?: number) {
+  /**
+   * Read the script aloud. `loop` repeats it until something stops it, which
+   * is the normal practice mode — shadowing is repetition, and tapping play
+   * between every pass is the thing you least want to do while speaking.
+   * `after` chains a follow-up step instead (used by 交互に聞く), so the two
+   * are mutually exclusive.
+   */
+  function speakScript(opts: SpeakOpts = {}) {
     if (!tts.supported() || !voiceRef.current) {
       patch({ err: '読み上げ音声が使えません。' });
       return;
     }
+    speakOptsRef.current = opts;
+    const { after, loop } = opts;
     const m = findMaterial();
-    const rate = rateOverride ?? state.speed;
-    patch((s) => ({ speaking: true, plays: s.plays + 1, progress: 0, line: 0 }));
-    const sp = tts.speak(m.en, {
-      rate,
-      voice: voiceRef.current,
-      gap: rate < 0.9 ? 420 : 260,
-      onSentence: (i) => patch({ line: i }),
-      onProgress: (p) => patch({ progress: p }),
-    });
-    spRef.current = sp;
-    sp.promise.then(() => {
-      if (spRef.current !== sp) return;
-      spRef.current = null;
-      patch({ speaking: false, progress: 0, line: -1 });
-      if (after) chainTimerRef.current = setTimeout(after, CHAIN_GAP_MS);
-    });
+    const rate = opts.rate ?? state.speed;
+
+    const runOnce = () => {
+      patch((s) => ({ speaking: true, looping: !!loop, plays: s.plays + 1, progress: 0, line: 0 }));
+      const sp = tts.speak(m.en, {
+        rate,
+        voice: voiceRef.current,
+        gap: rate < 0.9 ? 420 : 260,
+        onSentence: (i) => patch({ line: i }),
+        onProgress: (p) => patch({ progress: p }),
+      });
+      spRef.current = sp;
+      sp.promise.then(() => {
+        if (spRef.current !== sp) return;
+        spRef.current = null;
+        if (loop) {
+          // `speaking` stays true across the pause so the transport doesn't
+          // flicker between repeats.
+          patch({ progress: 0, line: -1 });
+          loopTimerRef.current = setTimeout(runOnce, loopGapMs(rate));
+          return;
+        }
+        patch({ speaking: false, looping: false, progress: 0, line: -1 });
+        if (after) chainTimerRef.current = setTimeout(after, CHAIN_GAP_MS);
+      });
+    };
+
+    runOnce();
   }
 
   function playTake(take?: Take | null, after?: () => void) {
@@ -329,7 +370,7 @@ export function useShadoiApp(config: AppConfig) {
       patch({ recording: true, err: '' });
       // Without an English voice the take is still worth recording — just
       // without a reference to shadow.
-      if (voiceRef.current) speakScript();
+      if (voiceRef.current) speakScript({ loop: true });
     } catch {
       patch({ err: 'マイクを使用できませんでした。ブラウザのマイク許可を確認してください。' });
     }
@@ -420,7 +461,7 @@ export function useShadoiApp(config: AppConfig) {
     }
     stopSpeech();
     stopMine();
-    speakScript();
+    speakScript({ loop: true });
   }
   function toggleRec() {
     if (state.recording) {
@@ -436,18 +477,22 @@ export function useShadoiApp(config: AppConfig) {
     const sel = selectedTake();
     if (!sel) return;
     stopAll();
-    speakScript(() => playTake(sel));
+    // One round of reference-then-take: this is a comparison, not practice,
+    // so it does not loop.
+    speakScript({ after: () => playTake(sel) });
   }
   function cycleSpeed() {
     const opts = SPEED_OPTIONS;
     const next = opts[(opts.indexOf(state.speed as (typeof opts)[number]) + 1) % opts.length];
     const wasSpeaking = state.speaking;
+    const current = speakOptsRef.current;
     patch({ speed: next });
     // The readout can't change rate mid-utterance, so restart it at the new
-    // speed. A recording in progress keeps running.
+    // speed, in whichever mode it was already running. A recording in
+    // progress keeps running.
     if (wasSpeaking) {
       stopSpeech();
-      speakScript(undefined, next);
+      speakScript({ ...current, rate: next });
     }
   }
   function selectTake(id: string) {
