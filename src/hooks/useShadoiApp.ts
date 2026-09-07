@@ -3,7 +3,7 @@ import type { AppConfig, Draft, HistoryEntry, Level, LevelFilter, Material, Mate
 import { BUILTIN_MATERIALS, buildHistory, wordCount } from '../lib/materials';
 import * as tts from '../lib/tts';
 import { dayGap, dayKey, loadPersisted, savePersisted, shortLabel } from '../lib/storage';
-import { CHAIN_GAP_MS, SPEED_OPTIONS, loopGapMs } from '../lib/config';
+import { SPEED_OPTIONS, loopGapMs } from '../lib/config';
 
 interface State {
   screen: Screen;
@@ -23,7 +23,6 @@ interface State {
   plays: number;
   takeCount: number;
   playingId: string | null;
-  selTake: string | null;
   progress: number;
   sessionSec: number;
   voiceName: string;
@@ -35,8 +34,6 @@ interface State {
 }
 
 interface SpeakOpts {
-  /** Chain a step once the readout finishes. Ignored when `loop` is set. */
-  after?: () => void;
   /** Override the current speed (used when the rate changes mid-playback). */
   rate?: number;
   /** Repeat the script until stopped. */
@@ -83,7 +80,6 @@ function buildInitialState(config: AppConfig): State {
     plays: 0,
     takeCount: 0,
     playingId: null,
-    selTake: null,
     progress: 0,
     sessionSec: 0,
     voiceName: saved.voiceName || '',
@@ -105,7 +101,6 @@ export function useShadoiApp(config: AppConfig) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const recAutoPlayRef = useRef(true);
-  const chainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speakOptsRef = useRef<SpeakOpts>({});
   const screenRef = useRef<Screen>(state.screen);
@@ -171,7 +166,6 @@ export function useShadoiApp(config: AppConfig) {
     return () => {
       if (spRef.current) spRef.current.stop();
       tts.cancel();
-      if (chainTimerRef.current) clearTimeout(chainTimerRef.current);
       if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
       if (audioRef.current) {
         try {
@@ -208,22 +202,13 @@ export function useShadoiApp(config: AppConfig) {
     return takesRef.current[mid || state.mid] || [];
   }
 
-  function selectedTake(): Take | null {
-    const arr = takeArr();
-    return arr.find((t) => t.id === state.selTake) || arr[arr.length - 1] || null;
-  }
-
-  /** Stop the reference readout and any queued chain step. Leaves recording alone. */
+  /** Stop the reference readout, including a pending repeat. Leaves recording alone. */
   function stopSpeech() {
     if (spRef.current) {
       spRef.current.stop();
       spRef.current = null;
     }
     tts.cancel();
-    if (chainTimerRef.current) {
-      clearTimeout(chainTimerRef.current);
-      chainTimerRef.current = null;
-    }
     // Cancels a repeat that is waiting out the gap between passes.
     if (loopTimerRef.current) {
       clearTimeout(loopTimerRef.current);
@@ -273,8 +258,6 @@ export function useShadoiApp(config: AppConfig) {
    * Read the script aloud. `loop` repeats it until something stops it, which
    * is the normal practice mode — shadowing is repetition, and tapping play
    * between every pass is the thing you least want to do while speaking.
-   * `after` chains a follow-up step instead (used by 交互に聞く), so the two
-   * are mutually exclusive.
    */
   function speakScript(opts: SpeakOpts = {}) {
     if (!tts.supported() || !voiceRef.current) {
@@ -282,7 +265,7 @@ export function useShadoiApp(config: AppConfig) {
       return;
     }
     speakOptsRef.current = opts;
-    const { after, loop } = opts;
+    const { loop } = opts;
     const m = findMaterial();
     const rate = opts.rate ?? state.speed;
 
@@ -307,16 +290,13 @@ export function useShadoiApp(config: AppConfig) {
           return;
         }
         patch({ speaking: false, looping: false, progress: 0, line: -1 });
-        if (after) chainTimerRef.current = setTimeout(after, CHAIN_GAP_MS);
       });
     };
 
     runOnce();
   }
 
-  function playTake(take?: Take | null, after?: () => void) {
-    const t = take || selectedTake();
-    if (!t) return;
+  function playTake(t: Take) {
     tts.cancel();
     if (audioRef.current) {
       try {
@@ -330,12 +310,9 @@ export function useShadoiApp(config: AppConfig) {
     a.ontimeupdate = () => {
       if (a.duration && isFinite(a.duration)) patch({ progress: a.currentTime / a.duration });
     };
-    a.onended = () => {
-      patch({ playingMine: false, playingId: null, progress: 0 });
-      if (after) chainTimerRef.current = setTimeout(after, CHAIN_GAP_MS);
-    };
+    a.onended = () => patch({ playingMine: false, playingId: null, progress: 0 });
     a.onerror = () => patch({ playingMine: false, playingId: null, err: '録音の再生に失敗しました。' });
-    patch({ playingMine: true, playingId: t.id, selTake: t.id, progress: 0 });
+    patch({ playingMine: true, playingId: t.id, progress: 0 });
     a.play().catch(() => patch({ playingMine: false, playingId: null, err: '録音の再生に失敗しました。' }));
   }
 
@@ -361,7 +338,7 @@ export function useShadoiApp(config: AppConfig) {
         const take: Take = { id: 't' + t0, url: URL.createObjectURL(blob), sec: Math.max(1, Math.round((Date.now() - t0) / 1000)), at: new Date() };
         takesRef.current[mid] = (takesRef.current[mid] || []).concat([take]);
         recRef.current = null;
-        patch((s) => ({ recording: false, takeCount: s.takeCount + 1, selTake: take.id }));
+        patch((s) => ({ recording: false, takeCount: s.takeCount + 1 }));
         if (recAutoPlayRef.current) playTake(take);
       };
       recRef.current = rec;
@@ -381,12 +358,12 @@ export function useShadoiApp(config: AppConfig) {
     if (state.playingId === t.id) stopAll();
     URL.revokeObjectURL(t.url);
     takesRef.current[mid] = takeArr(mid).filter((x) => x.id !== t.id);
-    patch((s) => ({ takeCount: Math.max(0, s.takeCount - 1), selTake: s.selTake === t.id ? null : s.selTake }));
+    patch((s) => ({ takeCount: Math.max(0, s.takeCount - 1) }));
   }
 
   function openMat(id: string) {
     stopAll();
-    patch({ screen: 'practice', mid: id, sessionSec: 0, plays: 0, selTake: null });
+    patch({ screen: 'practice', mid: id, sessionSec: 0, plays: 0 });
   }
 
   // --- Navigation ---
@@ -473,14 +450,6 @@ export function useShadoiApp(config: AppConfig) {
       startRec();
     }
   }
-  function playAlt() {
-    const sel = selectedTake();
-    if (!sel) return;
-    stopAll();
-    // One round of reference-then-take: this is a comparison, not practice,
-    // so it does not loop.
-    speakScript({ after: () => playTake(sel) });
-  }
   function cycleSpeed() {
     const opts = SPEED_OPTIONS;
     const next = opts[(opts.indexOf(state.speed as (typeof opts)[number]) + 1) % opts.length];
@@ -494,9 +463,6 @@ export function useShadoiApp(config: AppConfig) {
       stopSpeech();
       speakScript({ ...current, rate: next });
     }
-  }
-  function selectTake(id: string) {
-    patch({ selTake: id });
   }
   function playTakeById(id: string) {
     const t = takeArr().find((x) => x.id === id);
@@ -551,7 +517,6 @@ export function useShadoiApp(config: AppConfig) {
     allMaterials: allMaterials(),
     filteredMaterials,
     takes,
-    selectedTake: selectedTake(),
 
     goBack,
     goHome,
@@ -573,9 +538,7 @@ export function useShadoiApp(config: AppConfig) {
 
     playRef,
     toggleRec,
-    playAlt,
     cycleSpeed,
-    selectTake,
     playTakeById,
     deleteTakeById,
 

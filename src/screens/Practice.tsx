@@ -4,8 +4,8 @@ import { fmtElapsed, fmtClock } from '../lib/format';
 import { colors, shadows } from '../lib/theme';
 
 export function Practice({ app }: { app: ShadoiApp }) {
-  const { state, currentMaterial, voiceOptions, takes, selectedTake } = app;
-  const { toggleScript, toggleJa, setVoice, playRef, toggleRec, playAlt, cycleSpeed, selectTake, playTakeById, deleteTakeById, goResult } = app;
+  const { state, currentMaterial, voiceOptions, takes } = app;
+  const { toggleScript, toggleJa, setVoice, playRef, toggleRec, cycleSpeed, playTakeById, deleteTakeById, goResult } = app;
 
   const hasTake = takes.length > 0;
   const busy = state.speaking || state.playingMine;
@@ -106,7 +106,6 @@ export function Practice({ app }: { app: ShadoiApp }) {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12, marginTop: 20 }}>
           {takes.map((t, i) => {
             const playing = state.playingId === t.id;
-            const isSel = selectedTake && selectedTake.id === t.id;
             return (
               <div key={t.id} style={{ maxWidth: '82%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <div style={{ fontSize: 11, color: colors.textSub, marginBottom: 5 }}>{`テイク${i + 1} · ${fmtClock(t.at)} · ${t.sec}秒`}</div>
@@ -116,20 +115,6 @@ export function Practice({ app }: { app: ShadoiApp }) {
                     style={{ background: 'transparent', color: colors.placeholder, border: 0, fontSize: 15, width: 26, height: 26, padding: 0, lineHeight: 1 }}
                   >
                     ×
-                  </button>
-                  <button
-                    onClick={() => selectTake(t.id)}
-                    style={{
-                      background: isSel ? colors.accentSoftBg : 'transparent',
-                      color: isSel ? colors.accentDark : colors.placeholder,
-                      border: 0,
-                      borderRadius: 999,
-                      padding: '5px 11px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {isSel ? '比較対象' : '選ぶ'}
                   </button>
                   <button
                     onClick={() => playTakeById(t.id)}
@@ -174,7 +159,7 @@ export function Practice({ app }: { app: ShadoiApp }) {
               : state.speaking
                 ? 'もう一度押すと止まります'
                 : hasTake
-                  ? '交互に聞くと差が見つかる'
+                  ? '録音をタップで聞き返せます'
                   : '元音声は止めるまで繰り返します'}
           </span>
         </div>
@@ -233,23 +218,6 @@ export function Practice({ app }: { app: ShadoiApp }) {
             </button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button
-              onClick={playAlt}
-              disabled={!hasTake}
-              style={{
-                background: colors.neutralBg,
-                color: hasTake ? colors.textFaint4 : colors.placeholder,
-                border: 0,
-                borderRadius: 11,
-                padding: '0 14px',
-                height: 40,
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: hasTake ? 'pointer' : 'default',
-              }}
-            >
-              交互に聞く
-            </button>
             <button
               onClick={cycleSpeed}
               style={{ background: colors.neutralBg, color: colors.textFaint4, border: 0, borderRadius: 11, padding: '0 14px', height: 40, fontSize: 13, fontWeight: 500 }}
