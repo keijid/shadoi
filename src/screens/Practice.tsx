@@ -21,7 +21,7 @@ export function Practice({ app }: { app: ShadoiApp }) {
 
   return (
     <>
-      <main style={{ maxWidth: 760, margin: '0 auto', padding: '16px 16px calc(178px + env(safe-area-inset-bottom))', animation: 'riseIn .35s ease both' }}>
+      <main style={{ maxWidth: 760, margin: '0 auto', padding: '16px 16px calc(196px + env(safe-area-inset-bottom))', animation: 'riseIn .35s ease both' }}>
         {state.err && (
           <div style={{ background: colors.redBg, color: colors.redDark, borderRadius: 14, padding: '13px 16px', fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
             {state.err}
@@ -178,7 +178,7 @@ export function Practice({ app }: { app: ShadoiApp }) {
       </main>
 
       <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 30, background: 'rgba(255,255,255,.97)', backdropFilter: 'blur(12px)', borderTop: `1px solid ${colors.border}` }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', padding: '12px 16px calc(14px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: '14px 16px calc(22px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <button
               onClick={playRef}
@@ -218,8 +218,8 @@ export function Practice({ app }: { app: ShadoiApp }) {
               {state.recording ? '停止' : hasTake ? 'もう1本' : '録音'}
             </button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ display: 'flex', gap: 2, padding: 3, background: colors.neutralBg, borderRadius: 999 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', rowGap: 8 }}>
+            <div style={{ display: 'flex', gap: 3, padding: 4, background: colors.neutralBg, borderRadius: 999 }}>
               {SPEED_OPTIONS.map((v) => {
                 const on = state.speed === v;
                 return (
@@ -232,9 +232,9 @@ export function Practice({ app }: { app: ShadoiApp }) {
                       color: on ? colors.text : colors.textFaint2,
                       border: 0,
                       borderRadius: 999,
-                      padding: '0 13px',
-                      height: 34,
-                      fontSize: 12.5,
+                      padding: '0 11px',
+                      height: 38,
+                      fontSize: 13,
                       fontWeight: on ? 700 : 500,
                       boxShadow: on ? '0 1px 2px rgba(20,24,31,.10)' : 'none',
                       transition: 'background .15s, color .15s',
@@ -247,7 +247,7 @@ export function Practice({ app }: { app: ShadoiApp }) {
             </div>
             <button
               onClick={goResult}
-              style={{ marginLeft: 'auto', background: 'transparent', color: colors.accentDark, border: 0, padding: '0 6px', height: 40, fontSize: 13, fontWeight: 700 }}
+              style={{ marginLeft: 'auto', background: 'transparent', color: colors.accentDark, border: 0, padding: '0 10px', height: 46, fontSize: 13, fontWeight: 700 }}
             >
               終える
             </button>
