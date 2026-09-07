@@ -1,5 +1,6 @@
 import type { ShadoiApp } from '../hooks/useShadoiApp';
 import { colors, shadows } from '../lib/theme';
+import { VersionFooter } from '../components/VersionFooter';
 
 const WEEK_LABELS = ['月', '火', '水', '木', '金', '土', '日'];
 
@@ -130,6 +131,8 @@ export function Home({ app }: { app: ShadoiApp }) {
           ))}
         </div>
       </section>
+
+      <VersionFooter />
     </main>
   );
 }
