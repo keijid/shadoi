@@ -18,6 +18,9 @@ export function Header({ app }: { app: ShadoiApp }) {
         background: 'rgba(255,255,255,.92)',
         backdropFilter: 'blur(12px)',
         borderBottom: `1px solid ${colors.border}`,
+        // Installed to the home screen the app runs full-screen, so the bar
+        // has to clear the status bar itself. Zero in a browser tab.
+        paddingTop: 'env(safe-area-inset-top)',
       }}
     >
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '0 16px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>

@@ -18,6 +18,15 @@ npm run build    # 型チェック + 本番ビルド
 npm run lint      # oxlint
 ```
 
+## ホーム画面に追加（iPhone）
+
+Safari で https://keijid.github.io/shadoi/ を開き、共有 → 「ホーム画面に追加」。
+アドレスバーのない全画面（standalone）で起動する。
+
+アイコンは `public/icons/`。モチーフは「声を影のように追いかける」＝シャドーイングそのもので、
+波形の後ろに同じ波形の影がずれて重なる。`tools/icon/make_icons.py` で再生成できる
+（`pip install playwright pillow` が必要）。波の形・影のオフセットはスクリプト冒頭の定数で調整する。
+
 ## 既知の制約
 
 - 読み上げ音声はOS/ブラウザ依存で、任意位置へのシークはできない（一時停止・再開のみ）
